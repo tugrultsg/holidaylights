@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
+import { getCredits, useFreeCredit, usePaidCredit } from "@/lib/credits";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -7,54 +8,35 @@ fal.config({
 
 export const maxDuration = 60;
 
-const DAILY_LIMIT = 10;
-
-// In-memory rate limit store (resets on worker restart, but good enough for basic protection)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-
-  if (!entry || now > entry.resetAt) {
-    // New day or first request
-    rateLimitMap.set(ip, {
-      count: 1,
-      resetAt: now + 24 * 60 * 60 * 1000,
-    });
-    return { allowed: true, remaining: DAILY_LIMIT - 1 };
-  }
-
-  if (entry.count >= DAILY_LIMIT) {
-    return { allowed: false, remaining: 0 };
-  }
-
-  entry.count++;
-  return { allowed: true, remaining: DAILY_LIMIT - entry.count };
-}
-
 export async function POST(req: NextRequest) {
-  const ip =
-    req.headers.get("cf-connecting-ip") ||
-    req.headers.get("x-forwarded-for")?.split(",")[0] ||
-    "unknown";
-
-  const { allowed, remaining } = checkRateLimit(ip);
-
-  if (!allowed) {
-    return NextResponse.json(
-      { error: "Daily limit reached (10 generations per day). Please try again tomorrow." },
-      {
-        status: 429,
-        headers: { "X-RateLimit-Remaining": "0" },
-      }
-    );
-  }
-
-  const { imageUrl, address } = await req.json();
+  const { imageUrl, address, sessionId } = await req.json();
 
   if (!imageUrl) {
     return NextResponse.json({ error: "imageUrl is required" }, { status: 400 });
+  }
+
+  if (!sessionId) {
+    return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
+  }
+
+  // Check credits
+  const credits = getCredits(sessionId);
+
+  if (!credits.freeUsed) {
+    // First generation is free
+    useFreeCredit(sessionId);
+  } else if (credits.paidCredits > 0) {
+    // Use a paid credit
+    usePaidCredit(sessionId);
+  } else {
+    // No credits left
+    return NextResponse.json(
+      {
+        error: "NO_CREDITS",
+        message: "You've used your free generation. Purchase credits to continue ($2 per generation).",
+      },
+      { status: 402 }
+    );
   }
 
   try {
@@ -78,11 +60,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const updatedCredits = getCredits(sessionId);
+
     return NextResponse.json({
       originalUrl: imageUrl,
       generatedUrl: data.images[0].url,
       address,
-      remaining,
+      credits: updatedCredits.paidCredits,
+      freeUsed: updatedCredits.freeUsed,
     });
   } catch (error: unknown) {
     console.error("fal.ai error:", error);

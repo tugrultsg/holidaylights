@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
 interface Neighbor {
   address: string;
@@ -20,6 +20,16 @@ interface Prediction {
   placeId: string;
 }
 
+function getSessionId(): string {
+  if (typeof window === "undefined") return "";
+  let id = localStorage.getItem("hl_session_id");
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem("hl_session_id", id);
+  }
+  return id;
+}
+
 export default function Home() {
   const [address, setAddress] = useState("");
   const [suggestions, setSuggestions] = useState<Prediction[]>([]);
@@ -31,9 +41,41 @@ export default function Home() {
   const [results, setResults] = useState<Record<number, GeneratedResult>>({});
   const [generatingAll, setGeneratingAll] = useState(false);
   const [error, setError] = useState("");
-  const [remaining, setRemaining] = useState<number | null>(null);
+  const [freeUsed, setFreeUsed] = useState(false);
+  const [paidCredits, setPaidCredits] = useState(0);
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [buyQuantity, setBuyQuantity] = useState(5);
+  const [buyLoading, setBuyLoading] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const sessionId = useRef("");
+
+  // Initialize session and check credits
+  const fetchCredits = useCallback(async () => {
+    if (!sessionId.current) return;
+    try {
+      const res = await fetch(`/api/credits?sessionId=${sessionId.current}`);
+      const data = await res.json();
+      setFreeUsed(data.freeUsed);
+      setPaidCredits(data.paidCredits);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    sessionId.current = getSessionId();
+    fetchCredits();
+
+    // Check for payment success redirect
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "success") {
+      // Clean URL
+      window.history.replaceState({}, "", "/");
+      // Refresh credits after a short delay (webhook may take a moment)
+      setTimeout(fetchCredits, 2000);
+    }
+  }, [fetchCredits]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -104,6 +146,7 @@ export default function Home() {
 
   const generateLights = async (index: number, neighbor: Neighbor) => {
     setGenerating((prev) => ({ ...prev, [index]: true }));
+    setError("");
     try {
       const res = await fetch("/api/generate-lights", {
         method: "POST",
@@ -111,17 +154,24 @@ export default function Home() {
         body: JSON.stringify({
           imageUrl: neighbor.streetViewUrl,
           address: neighbor.address,
+          sessionId: sessionId.current,
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+
+      if (data.error === "NO_CREDITS") {
+        setShowBuyModal(true);
+        return;
+      }
+
+      if (!res.ok) throw new Error(data.error || data.message);
+
       setResults((prev) => ({
         ...prev,
         [index]: data,
       }));
-      if (data.remaining !== undefined) {
-        setRemaining(data.remaining);
-      }
+      setFreeUsed(data.freeUsed);
+      setPaidCredits(data.credits);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Generation failed";
       setError(message);
@@ -132,21 +182,43 @@ export default function Home() {
 
   const generateAll = async () => {
     setGeneratingAll(true);
-    const promises = neighbors.map((neighbor, index) => {
-      if (!results[index]) {
-        return generateLights(index, neighbor);
+    for (let i = 0; i < neighbors.length; i++) {
+      if (!results[i]) {
+        await generateLights(i, neighbors[i]);
+        // Stop if user ran out of credits
+        if (showBuyModal) break;
       }
-      return Promise.resolve();
-    });
-    await Promise.all(promises);
+    }
     setGeneratingAll(false);
   };
 
+  const handleBuyCredits = async () => {
+    setBuyLoading(true);
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quantity: buyQuantity,
+          sessionId: sessionId.current,
+        }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch {
+      setError("Could not start checkout");
+    } finally {
+      setBuyLoading(false);
+    }
+  };
+
   const completedCount = Object.keys(results).length;
+  const availableCredits = freeUsed ? paidCredits : 1 + paidCredits;
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white antialiased">
-      {/* Subtle gradient overlay */}
       <div className="fixed inset-0 bg-gradient-to-br from-indigo-950/20 via-transparent to-purple-950/10 pointer-events-none" />
 
       {/* Header */}
@@ -169,14 +241,20 @@ export default function Home() {
                 Visualize professional holiday lighting on neighboring homes
               </p>
             </div>
-            {remaining !== null && (
+            <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.06]">
                 <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                 <span className="text-xs text-white/50">
-                  <span className="text-white/80 font-medium">{remaining}</span> generations left
+                  <span className="text-white/80 font-medium">{availableCredits}</span> {availableCredits === 1 ? "credit" : "credits"}
                 </span>
               </div>
-            )}
+              <button
+                onClick={() => setShowBuyModal(true)}
+                className="px-3 py-1.5 text-xs font-medium rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-400 hover:to-orange-400 transition-all"
+              >
+                Buy Credits
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -250,6 +328,16 @@ export default function Home() {
           )}
         </div>
 
+        {/* First generation free banner */}
+        {!freeUsed && neighbors.length > 0 && (
+          <div className="mb-6 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-emerald-400" />
+            <p className="text-sm text-emerald-300/80">
+              Your first generation is <span className="font-semibold text-emerald-300">free</span> — try it out!
+            </p>
+          </div>
+        )}
+
         {/* Results header */}
         {customerAddress && (
           <div className="flex items-center justify-between mb-6">
@@ -295,7 +383,6 @@ export default function Home() {
               key={index}
               className="group rounded-2xl overflow-hidden bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all"
             >
-              {/* Address bar */}
               <div className="px-5 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="w-6 h-6 rounded-full bg-white/[0.06] flex items-center justify-center text-[10px] font-bold text-white/40">
@@ -329,9 +416,7 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Images */}
               <div className="grid md:grid-cols-2">
-                {/* Original */}
                 <div className="relative">
                   <div className="absolute top-3 left-3 z-10">
                     <span className="px-2.5 py-1 text-[10px] uppercase tracking-widest font-semibold bg-black/50 text-white/60 rounded-md backdrop-blur-md">
@@ -346,7 +431,6 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Generated */}
                 <div className="relative">
                   {results[index] ? (
                     <>
@@ -369,9 +453,7 @@ export default function Home() {
                           <div className="absolute inset-0 rounded-full border-2 border-white/[0.06]" />
                           <div className="absolute inset-0 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
                         </div>
-                        <p className="text-xs text-white/30">
-                          Adding holiday lights...
-                        </p>
+                        <p className="text-xs text-white/30">Adding holiday lights...</p>
                       </div>
                     </div>
                   ) : (
@@ -383,9 +465,7 @@ export default function Home() {
                             <path d="M12 6a6 6 0 0 0-4 10.5V18h8v-1.5A6 6 0 0 0 12 6z" />
                           </svg>
                         </div>
-                        <p className="text-xs text-white/20">
-                          Preview will appear here
-                        </p>
+                        <p className="text-xs text-white/20">Preview will appear here</p>
                       </div>
                     </div>
                   )}
@@ -404,20 +484,86 @@ export default function Home() {
                 <polyline points="9 22 9 12 15 12 15 22" />
               </svg>
             </div>
-            <p className="text-sm text-white/25">
-              Enter an address above to find nearby homes
-            </p>
+            <p className="text-sm text-white/25">Enter an address above to find nearby homes</p>
           </div>
         )}
 
         {!loading && neighbors.length === 0 && customerAddress && (
           <div className="text-center py-24">
-            <p className="text-sm text-white/25">
-              No neighbors found for this address. Try a different one.
-            </p>
+            <p className="text-sm text-white/25">No neighbors found for this address. Try a different one.</p>
           </div>
         )}
       </main>
+
+      {/* Buy Credits Modal */}
+      {showBuyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowBuyModal(false)}
+          />
+          <div className="relative bg-[#12121a] border border-white/[0.08] rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
+            <button
+              onClick={() => setShowBuyModal(false)}
+              className="absolute top-4 right-4 text-white/30 hover:text-white/60 transition-colors"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+
+            <div className="text-center mb-6">
+              <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-amber-400/20 to-orange-500/20 border border-amber-500/20 flex items-center justify-center">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-amber-400">
+                  <path d="M9 18h6M10 22h4M12 2v1" />
+                  <path d="M12 6a6 6 0 0 0-4 10.5V18h8v-1.5A6 6 0 0 0 12 6z" />
+                </svg>
+              </div>
+              <h2 className="text-lg font-semibold text-white mb-1">Buy Generation Credits</h2>
+              <p className="text-sm text-white/40">$2 per generation</p>
+            </div>
+
+            {/* Quantity selector */}
+            <div className="mb-6">
+              <div className="grid grid-cols-4 gap-2">
+                {[1, 5, 10, 25].map((qty) => (
+                  <button
+                    key={qty}
+                    onClick={() => setBuyQuantity(qty)}
+                    className={`py-3 rounded-xl text-center transition-all ${
+                      buyQuantity === qty
+                        ? "bg-amber-500/20 border border-amber-500/40 text-amber-300"
+                        : "bg-white/[0.04] border border-white/[0.06] text-white/50 hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    <div className="text-lg font-bold">{qty}</div>
+                    <div className="text-[10px] text-white/30">${qty * 2}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handleBuyCredits}
+              disabled={buyLoading}
+              className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 transition-all"
+            >
+              {buyLoading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Redirecting to checkout...
+                </span>
+              ) : (
+                `Pay $${buyQuantity * 2} for ${buyQuantity} credit${buyQuantity > 1 ? "s" : ""}`
+              )}
+            </button>
+
+            <p className="text-[11px] text-white/20 text-center mt-4">
+              Secure payment via Stripe
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

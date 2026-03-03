@@ -19,6 +19,7 @@ jobs:
       - run: npx opennextjs-cloudflare build
         env:
           NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
 
       - run: npx wrangler deploy
         env:
