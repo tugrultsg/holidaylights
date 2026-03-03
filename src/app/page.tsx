@@ -12,7 +12,8 @@ interface Neighbor {
 interface GeneratedResult {
   address: string;
   originalUrl: string;
-  generatedUrl: string;
+  generatedUrl: string | null;
+  error: string | null;
 }
 
 interface Prediction {
@@ -37,9 +38,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [neighbors, setNeighbors] = useState<Neighbor[]>([]);
   const [customerAddress, setCustomerAddress] = useState("");
-  const [generating, setGenerating] = useState<Record<number, boolean>>({});
-  const [results, setResults] = useState<Record<number, GeneratedResult>>({});
-  const [generatingAll, setGeneratingAll] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [results, setResults] = useState<GeneratedResult[]>([]);
   const [error, setError] = useState("");
   const [freeUsed, setFreeUsed] = useState(false);
   const [paidCredits, setPaidCredits] = useState(0);
@@ -50,12 +50,12 @@ export default function Home() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const sessionId = useRef("");
 
-  // Initialize session and check credits
   const fetchCredits = useCallback(async () => {
     if (!sessionId.current) return;
     try {
       const res = await fetch(`/api/credits?sessionId=${sessionId.current}`);
-      const data = await res.json() as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = (await res.json()) as any;
       setFreeUsed(data.freeUsed);
       setPaidCredits(data.paidCredits);
     } catch {
@@ -67,12 +67,9 @@ export default function Home() {
     sessionId.current = getSessionId();
     fetchCredits();
 
-    // Check for payment success redirect
     const params = new URLSearchParams(window.location.search);
     if (params.get("payment") === "success") {
-      // Clean URL
       window.history.replaceState({}, "", "/");
-      // Refresh credits after a short delay (webhook may take a moment)
       setTimeout(fetchCredits, 2000);
     }
   }, [fetchCredits]);
@@ -97,7 +94,8 @@ export default function Home() {
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/autocomplete?q=${encodeURIComponent(query)}`);
-        const data = await res.json() as any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const data = (await res.json()) as any;
         setSuggestions(data.predictions);
         setShowSuggestions(data.predictions.length > 0);
       } catch {
@@ -124,7 +122,7 @@ export default function Home() {
     setLoading(true);
     setError("");
     setNeighbors([]);
-    setResults({});
+    setResults([]);
 
     try {
       const res = await fetch("/api/neighbors", {
@@ -132,7 +130,8 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address }),
       });
-      const data = await res.json() as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = (await res.json()) as any;
       if (!res.ok) throw new Error(data.error);
       setCustomerAddress(data.customerAddress);
       setNeighbors(data.neighbors);
@@ -144,20 +143,25 @@ export default function Home() {
     }
   };
 
-  const generateLights = async (index: number, neighbor: Neighbor) => {
-    setGenerating((prev) => ({ ...prev, [index]: true }));
+  const generateAll = async () => {
+    setGenerating(true);
     setError("");
+
     try {
       const res = await fetch("/api/generate-lights", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageUrl: neighbor.streetViewUrl,
-          address: neighbor.address,
+          neighbors: neighbors.map((n) => ({
+            imageUrl: n.streetViewUrl,
+            address: n.address,
+          })),
           sessionId: sessionId.current,
         }),
       });
-      const data = await res.json() as any;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = (await res.json()) as any;
 
       if (data.error === "NO_CREDITS") {
         setShowBuyModal(true);
@@ -166,30 +170,15 @@ export default function Home() {
 
       if (!res.ok) throw new Error(data.error || data.message);
 
-      setResults((prev) => ({
-        ...prev,
-        [index]: data,
-      }));
+      setResults(data.results);
       setFreeUsed(data.freeUsed);
       setPaidCredits(data.credits);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Generation failed";
       setError(message);
     } finally {
-      setGenerating((prev) => ({ ...prev, [index]: false }));
+      setGenerating(false);
     }
-  };
-
-  const generateAll = async () => {
-    setGeneratingAll(true);
-    for (let i = 0; i < neighbors.length; i++) {
-      if (!results[i]) {
-        await generateLights(i, neighbors[i]);
-        // Stop if user ran out of credits
-        if (showBuyModal) break;
-      }
-    }
-    setGeneratingAll(false);
   };
 
   const handleBuyCredits = async () => {
@@ -203,7 +192,8 @@ export default function Home() {
           sessionId: sessionId.current,
         }),
       });
-      const data = await res.json() as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = (await res.json()) as any;
       if (data.url) {
         window.location.href = data.url;
       }
@@ -214,8 +204,8 @@ export default function Home() {
     }
   };
 
-  const completedCount = Object.keys(results).length;
   const availableCredits = freeUsed ? paidCredits : 1 + paidCredits;
+  const hasResults = results.length > 0;
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white antialiased">
@@ -328,16 +318,6 @@ export default function Home() {
           )}
         </div>
 
-        {/* First generation free banner */}
-        {!freeUsed && neighbors.length > 0 && (
-          <div className="mb-6 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3">
-            <div className="w-2 h-2 rounded-full bg-emerald-400" />
-            <p className="text-sm text-emerald-300/80">
-              Your first generation is <span className="font-semibold text-emerald-300">free</span> — try it out!
-            </p>
-          </div>
-        )}
-
         {/* Results header */}
         {customerAddress && (
           <div className="flex items-center justify-between mb-6">
@@ -348,131 +328,137 @@ export default function Home() {
                 <p className="text-sm text-white/70">{customerAddress}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              {completedCount > 0 && (
-                <span className="text-xs text-white/30">
-                  {completedCount}/{neighbors.length} generated
-                </span>
-              )}
-              {neighbors.length > 0 && (
-                <button
-                  onClick={generateAll}
-                  disabled={generatingAll || completedCount === neighbors.length}
-                  className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-semibold rounded-lg hover:from-amber-400 hover:to-orange-400 disabled:from-white/10 disabled:to-white/10 disabled:text-white/30 transition-all"
-                >
-                  {generatingAll ? (
-                    <span className="flex items-center gap-2">
-                      <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Generating...
-                    </span>
-                  ) : completedCount === neighbors.length ? (
-                    "All Done"
-                  ) : (
-                    "Generate All"
-                  )}
-                </button>
-              )}
-            </div>
+            {neighbors.length > 0 && !hasResults && (
+              <button
+                onClick={generateAll}
+                disabled={generating}
+                className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold rounded-xl hover:from-amber-400 hover:to-orange-400 disabled:from-white/10 disabled:to-white/10 disabled:text-white/30 transition-all"
+              >
+                {generating ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Generating all {neighbors.length} homes...
+                  </span>
+                ) : (
+                  <>
+                    Generate All {neighbors.length} Homes
+                    {!freeUsed ? (
+                      <span className="ml-2 px-2 py-0.5 bg-emerald-500/30 text-emerald-300 text-[10px] rounded-full font-bold uppercase">Free</span>
+                    ) : (
+                      <span className="ml-2 text-white/50 text-xs font-normal">1 credit</span>
+                    )}
+                  </>
+                )}
+              </button>
+            )}
+            {hasResults && (
+              <span className="flex items-center gap-1.5 text-xs text-emerald-400/70">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                All generated
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Free banner */}
+        {!freeUsed && neighbors.length > 0 && !hasResults && (
+          <div className="mb-6 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3">
+            <div className="w-2 h-2 rounded-full bg-emerald-400" />
+            <p className="text-sm text-emerald-300/80">
+              Your first address is <span className="font-semibold text-emerald-300">free</span> — all 5 neighbors included!
+            </p>
           </div>
         )}
 
         {/* Neighbors grid */}
         <div className="space-y-4">
-          {neighbors.map((neighbor, index) => (
-            <div
-              key={index}
-              className="group rounded-2xl overflow-hidden bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all"
-            >
-              <div className="px-5 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-white/[0.06] flex items-center justify-center text-[10px] font-bold text-white/40">
-                    {index + 1}
-                  </span>
-                  <span className="text-sm text-white/60">{neighbor.address}</span>
-                </div>
-                {!results[index] && (
-                  <button
-                    onClick={() => generateLights(index, neighbor)}
-                    disabled={generating[index]}
-                    className="px-4 py-1.5 text-xs font-medium rounded-lg bg-white/[0.06] text-white/60 hover:bg-white/[0.1] hover:text-white/80 disabled:opacity-50 transition-all"
-                  >
-                    {generating[index] ? (
-                      <span className="flex items-center gap-2">
-                        <span className="w-3 h-3 border-2 border-white/20 border-t-amber-400 rounded-full animate-spin" />
-                        Generating...
-                      </span>
-                    ) : (
-                      "Add Lights"
-                    )}
-                  </button>
-                )}
-                {results[index] && (
-                  <span className="flex items-center gap-1.5 text-xs text-emerald-400/70">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    Done
-                  </span>
-                )}
-              </div>
-
-              <div className="grid md:grid-cols-2">
-                <div className="relative">
-                  <div className="absolute top-3 left-3 z-10">
-                    <span className="px-2.5 py-1 text-[10px] uppercase tracking-widest font-semibold bg-black/50 text-white/60 rounded-md backdrop-blur-md">
-                      Before
+          {neighbors.map((neighbor, index) => {
+            const result = results[index];
+            return (
+              <div
+                key={index}
+                className="group rounded-2xl overflow-hidden bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.1] transition-all"
+              >
+                <div className="px-5 py-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="w-6 h-6 rounded-full bg-white/[0.06] flex items-center justify-center text-[10px] font-bold text-white/40">
+                      {index + 1}
                     </span>
+                    <span className="text-sm text-white/60">{neighbor.address}</span>
                   </div>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={neighbor.streetViewUrl}
-                    alt={`Street view of ${neighbor.address}`}
-                    className="w-full h-72 object-cover"
-                  />
-                </div>
-
-                <div className="relative">
-                  {results[index] ? (
-                    <>
-                      <div className="absolute top-3 left-3 z-10">
-                        <span className="px-2.5 py-1 text-[10px] uppercase tracking-widest font-semibold bg-amber-500/80 text-white rounded-md backdrop-blur-md">
-                          After
-                        </span>
-                      </div>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={results[index].generatedUrl}
-                        alt={`${neighbor.address} with holiday lights`}
-                        className="w-full h-72 object-cover"
-                      />
-                    </>
-                  ) : generating[index] ? (
-                    <div className="flex items-center justify-center h-72 bg-white/[0.02]">
-                      <div className="text-center">
-                        <div className="relative w-10 h-10 mx-auto mb-3">
-                          <div className="absolute inset-0 rounded-full border-2 border-white/[0.06]" />
-                          <div className="absolute inset-0 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
-                        </div>
-                        <p className="text-xs text-white/30">Adding holiday lights...</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center h-72 bg-white/[0.02]">
-                      <div className="text-center">
-                        <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-white/[0.04] flex items-center justify-center">
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/15">
-                            <path d="M9 18h6M10 22h4M12 2v1" />
-                            <path d="M12 6a6 6 0 0 0-4 10.5V18h8v-1.5A6 6 0 0 0 12 6z" />
-                          </svg>
-                        </div>
-                        <p className="text-xs text-white/20">Preview will appear here</p>
-                      </div>
-                    </div>
+                  {result?.generatedUrl && (
+                    <span className="flex items-center gap-1.5 text-xs text-emerald-400/70">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Done
+                    </span>
+                  )}
+                  {result?.error && (
+                    <span className="text-xs text-red-400/70">Failed</span>
                   )}
                 </div>
+
+                <div className="grid md:grid-cols-2">
+                  <div className="relative">
+                    <div className="absolute top-3 left-3 z-10">
+                      <span className="px-2.5 py-1 text-[10px] uppercase tracking-widest font-semibold bg-black/50 text-white/60 rounded-md backdrop-blur-md">
+                        Before
+                      </span>
+                    </div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={neighbor.streetViewUrl}
+                      alt={`Street view of ${neighbor.address}`}
+                      className="w-full h-72 object-cover"
+                    />
+                  </div>
+
+                  <div className="relative">
+                    {result?.generatedUrl ? (
+                      <>
+                        <div className="absolute top-3 left-3 z-10">
+                          <span className="px-2.5 py-1 text-[10px] uppercase tracking-widest font-semibold bg-amber-500/80 text-white rounded-md backdrop-blur-md">
+                            After
+                          </span>
+                        </div>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={result.generatedUrl}
+                          alt={`${neighbor.address} with holiday lights`}
+                          className="w-full h-72 object-cover"
+                        />
+                      </>
+                    ) : generating ? (
+                      <div className="flex items-center justify-center h-72 bg-white/[0.02]">
+                        <div className="text-center">
+                          <div className="relative w-10 h-10 mx-auto mb-3">
+                            <div className="absolute inset-0 rounded-full border-2 border-white/[0.06]" />
+                            <div className="absolute inset-0 rounded-full border-2 border-amber-400 border-t-transparent animate-spin" />
+                          </div>
+                          <p className="text-xs text-white/30">Adding holiday lights...</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-72 bg-white/[0.02]">
+                        <div className="text-center">
+                          <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-white/[0.04] flex items-center justify-center">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/15">
+                              <path d="M9 18h6M10 22h4M12 2v1" />
+                              <path d="M12 6a6 6 0 0 0-4 10.5V18h8v-1.5A6 6 0 0 0 12 6z" />
+                            </svg>
+                          </div>
+                          <p className="text-xs text-white/20">Click &ldquo;Generate All&rdquo; above</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Empty state */}
@@ -519,11 +505,10 @@ export default function Home() {
                   <path d="M12 6a6 6 0 0 0-4 10.5V18h8v-1.5A6 6 0 0 0 12 6z" />
                 </svg>
               </div>
-              <h2 className="text-lg font-semibold text-white mb-1">Buy Generation Credits</h2>
-              <p className="text-sm text-white/40">$2 per generation</p>
+              <h2 className="text-lg font-semibold text-white mb-1">Buy Address Credits</h2>
+              <p className="text-sm text-white/40">$2 per address (includes all 5 neighbors)</p>
             </div>
 
-            {/* Quantity selector */}
             <div className="mb-6">
               <div className="grid grid-cols-4 gap-2">
                 {[1, 5, 10, 25].map((qty) => (
@@ -554,7 +539,7 @@ export default function Home() {
                   Redirecting to checkout...
                 </span>
               ) : (
-                `Pay $${buyQuantity * 2} for ${buyQuantity} credit${buyQuantity > 1 ? "s" : ""}`
+                `Pay $${buyQuantity * 2} for ${buyQuantity} address${buyQuantity > 1 ? "es" : ""}`
               )}
             </button>
 

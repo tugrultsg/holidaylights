@@ -19,8 +19,8 @@ export async function POST(req: NextRequest) {
           currency: "usd",
           unit_amount: 200, // $2.00
           product_data: {
-            name: "Holiday Lights Generation Credit",
-            description: "AI-powered holiday lights preview for one home",
+            name: "Holiday Lights Address Credit",
+            description: "AI-powered holiday lights preview for all 5 neighbors of one address",
           },
         },
         quantity: credits,
