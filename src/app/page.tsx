@@ -1,6 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import { EmbeddedCheckoutProvider, EmbeddedCheckout } from "@stripe/react-stripe-js";
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 interface Neighbor {
   address: string;
@@ -46,6 +50,7 @@ export default function Home() {
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [buyAmount, setBuyAmount] = useState(1000);
   const [buyLoading, setBuyLoading] = useState(false);
+  const [checkoutClientSecret, setCheckoutClientSecret] = useState<string | null>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -191,6 +196,7 @@ export default function Home() {
 
   const handleBuyCredits = async () => {
     setBuyLoading(true);
+    setError("");
     try {
       const res = await fetch("/api/checkout", {
         method: "POST",
@@ -201,9 +207,15 @@ export default function Home() {
       const data = (await res.json()) as any;
       if (data.error === "UNAUTHORIZED") { window.location.href = "/api/auth/login"; return; }
       if (!res.ok) { setError(data.error || "Checkout failed"); setBuyLoading(false); return; }
-      if (data.url) { window.location.href = data.url; return; }
-      setError("No checkout URL returned");
+      if (data.clientSecret) { setCheckoutClientSecret(data.clientSecret); }
+      else { setError("Could not start checkout"); }
     } catch (err: unknown) { setError(err instanceof Error ? err.message : "Could not start checkout"); } finally { setBuyLoading(false); }
+  };
+
+  const closeBuyModal = () => {
+    setShowBuyModal(false);
+    setCheckoutClientSecret(null);
+    fetchCredits();
   };
 
   const completedCount = Object.values(results).filter((r) => r?.generatedUrl).length;
@@ -371,28 +383,38 @@ export default function Home() {
       {/* Buy Modal */}
       {showBuyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowBuyModal(false)} />
-          <div className="relative bg-[#12121a] border border-white/[0.08] rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
-            <button onClick={() => setShowBuyModal(false)} className="absolute top-4 right-4 text-white/30 hover:text-white/60 transition-colors"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button>
-            <div className="text-center mb-6">
-              <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-amber-400/20 to-orange-500/20 border border-amber-500/20 flex items-center justify-center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-amber-400"><path d="M9 18h6M10 22h4M12 2v1" /><path d="M12 6a6 6 0 0 0-4 10.5V18h8v-1.5A6 6 0 0 0 12 6z" /></svg></div>
-              <h2 className="text-lg font-semibold text-white mb-1">Add Funds</h2>
-              <p className="text-sm text-white/40">$2 for all 5 neighbors, or $0.50 each</p>
-            </div>
-            <div className="mb-6">
-              <div className="grid grid-cols-4 gap-2">
-                {[{ cents: 200, label: "$2" }, { cents: 500, label: "$5" }, { cents: 1000, label: "$10" }, { cents: 2500, label: "$25" }].map(({ cents, label }) => (
-                  <button key={cents} onClick={() => setBuyAmount(cents)} className={`py-3 rounded-xl text-center transition-all ${buyAmount === cents ? "bg-amber-500/20 border border-amber-500/40 text-amber-300" : "bg-white/[0.04] border border-white/[0.06] text-white/50 hover:bg-white/[0.06]"}`}>
-                    <div className="text-lg font-bold">{label}</div>
-                    <div className="text-[10px] text-white/30">{Math.floor(cents / 200)} addr{Math.floor(cents / 200) !== 1 ? "s" : ""}</div>
-                  </button>
-                ))}
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={closeBuyModal} />
+          <div className={`relative bg-[#12121a] border border-white/[0.08] rounded-2xl p-8 ${checkoutClientSecret ? "max-w-lg" : "max-w-sm"} w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto`}>
+            <button onClick={closeBuyModal} className="absolute top-4 right-4 text-white/30 hover:text-white/60 transition-colors z-10"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button>
+            {checkoutClientSecret ? (
+              <div id="checkout">
+                <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret: checkoutClientSecret }}>
+                  <EmbeddedCheckout />
+                </EmbeddedCheckoutProvider>
               </div>
-            </div>
-            <button onClick={handleBuyCredits} disabled={buyLoading} className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 transition-all">
-              {buyLoading ? (<span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Redirecting...</span>) : `Add $${(buyAmount / 100).toFixed(2)} to balance`}
-            </button>
-            <p className="text-[11px] text-white/20 text-center mt-4">Secure payment via Stripe</p>
+            ) : (
+              <>
+                <div className="text-center mb-6">
+                  <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-amber-400/20 to-orange-500/20 border border-amber-500/20 flex items-center justify-center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-amber-400"><path d="M9 18h6M10 22h4M12 2v1" /><path d="M12 6a6 6 0 0 0-4 10.5V18h8v-1.5A6 6 0 0 0 12 6z" /></svg></div>
+                  <h2 className="text-lg font-semibold text-white mb-1">Add Funds</h2>
+                  <p className="text-sm text-white/40">$2 for all 5 neighbors, or $0.50 each</p>
+                </div>
+                <div className="mb-6">
+                  <div className="grid grid-cols-4 gap-2">
+                    {[{ cents: 200, label: "$2" }, { cents: 500, label: "$5" }, { cents: 1000, label: "$10" }, { cents: 2500, label: "$25" }].map(({ cents, label }) => (
+                      <button key={cents} onClick={() => setBuyAmount(cents)} className={`py-3 rounded-xl text-center transition-all ${buyAmount === cents ? "bg-amber-500/20 border border-amber-500/40 text-amber-300" : "bg-white/[0.04] border border-white/[0.06] text-white/50 hover:bg-white/[0.06]"}`}>
+                        <div className="text-lg font-bold">{label}</div>
+                        <div className="text-[10px] text-white/30">{Math.floor(cents / 200)} addr{Math.floor(cents / 200) !== 1 ? "s" : ""}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button onClick={handleBuyCredits} disabled={buyLoading} className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 transition-all">
+                  {buyLoading ? (<span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Loading...</span>) : `Add $${(buyAmount / 100).toFixed(2)} to balance`}
+                </button>
+                <p className="text-[11px] text-white/20 text-center mt-4">Secure payment via Stripe</p>
+              </>
+            )}
           </div>
         </div>
       )}
