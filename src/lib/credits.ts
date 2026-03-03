@@ -1,33 +1,66 @@
-// Shared credit store — tracks free usage and paid credits per session
-// Key: sessionId, Value: { freeUsed: boolean, paidCredits: number }
+// Credits stored in Cloudflare KV for persistence across deploys
+// Key format: "credits:{sessionId}" -> JSON { freeUsed, paidCredits }
+
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+
+declare global {
+  interface CloudflareEnv {
+    RATE_LIMIT: KVNamespace;
+  }
+}
 
 interface CreditEntry {
   freeUsed: boolean;
   paidCredits: number;
 }
 
-const store = new Map<string, CreditEntry>();
-
-export function getCredits(sessionId: string): CreditEntry {
-  return store.get(sessionId) || { freeUsed: false, paidCredits: 0 };
+async function getKV(): Promise<KVNamespace | null> {
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    return env.RATE_LIMIT || null;
+  } catch {
+    return null;
+  }
 }
 
-export function useFreeCredit(sessionId: string): void {
-  const entry = getCredits(sessionId);
+function key(sessionId: string) {
+  return `credits:${sessionId}`;
+}
+
+export async function getCredits(sessionId: string): Promise<CreditEntry> {
+  const kv = await getKV();
+  if (!kv) return { freeUsed: false, paidCredits: 0 };
+
+  const data = await kv.get(key(sessionId), "json");
+  if (!data) return { freeUsed: false, paidCredits: 0 };
+  return data as CreditEntry;
+}
+
+export async function useFreeCredit(sessionId: string): Promise<void> {
+  const kv = await getKV();
+  if (!kv) return;
+
+  const entry = await getCredits(sessionId);
   entry.freeUsed = true;
-  store.set(sessionId, entry);
+  await kv.put(key(sessionId), JSON.stringify(entry));
 }
 
-export function usePaidCredit(sessionId: string): boolean {
-  const entry = getCredits(sessionId);
+export async function usePaidCredit(sessionId: string): Promise<boolean> {
+  const kv = await getKV();
+  if (!kv) return false;
+
+  const entry = await getCredits(sessionId);
   if (entry.paidCredits <= 0) return false;
   entry.paidCredits--;
-  store.set(sessionId, entry);
+  await kv.put(key(sessionId), JSON.stringify(entry));
   return true;
 }
 
-export function addCredits(sessionId: string, amount: number): void {
-  const entry = getCredits(sessionId);
+export async function addCredits(sessionId: string, amount: number): Promise<void> {
+  const kv = await getKV();
+  if (!kv) return;
+
+  const entry = await getCredits(sessionId);
   entry.paidCredits += amount;
-  store.set(sessionId, entry);
+  await kv.put(key(sessionId), JSON.stringify(entry));
 }

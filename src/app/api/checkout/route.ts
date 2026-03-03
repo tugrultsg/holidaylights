@@ -6,7 +6,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 export async function POST(req: NextRequest) {
-  const { quantity, sessionId } = await req.json();
+  const { quantity, sessionId } = (await req.json()) as { quantity?: number; sessionId?: string };
   const credits = quantity || 1;
 
   const origin = req.headers.get("origin") || "https://hunsaker-holiday-lights.tt-2ec.workers.dev";

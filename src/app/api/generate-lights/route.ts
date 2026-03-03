@@ -9,7 +9,7 @@ fal.config({
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
-  const { imageUrl, address, sessionId } = await req.json();
+  const { imageUrl, address, sessionId } = (await req.json()) as { imageUrl: string; address: string; sessionId: string };
 
   if (!imageUrl) {
     return NextResponse.json({ error: "imageUrl is required" }, { status: 400 });
@@ -20,16 +20,13 @@ export async function POST(req: NextRequest) {
   }
 
   // Check credits
-  const credits = getCredits(sessionId);
+  const credits = await getCredits(sessionId);
 
   if (!credits.freeUsed) {
-    // First generation is free
-    useFreeCredit(sessionId);
+    await useFreeCredit(sessionId);
   } else if (credits.paidCredits > 0) {
-    // Use a paid credit
-    usePaidCredit(sessionId);
+    await usePaidCredit(sessionId);
   } else {
-    // No credits left
     return NextResponse.json(
       {
         error: "NO_CREDITS",
@@ -60,7 +57,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const updatedCredits = getCredits(sessionId);
+    const updatedCredits = await getCredits(sessionId);
 
     return NextResponse.json({
       originalUrl: imageUrl,

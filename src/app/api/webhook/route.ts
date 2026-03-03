@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     const credits = parseInt(session.metadata?.credits || "1", 10);
 
     if (sessionId) {
-      addCredits(sessionId, credits);
+      await addCredits(sessionId, credits);
     }
   }
 

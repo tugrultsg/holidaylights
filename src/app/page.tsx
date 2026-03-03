@@ -55,7 +55,7 @@ export default function Home() {
     if (!sessionId.current) return;
     try {
       const res = await fetch(`/api/credits?sessionId=${sessionId.current}`);
-      const data = await res.json();
+      const data = await res.json() as any;
       setFreeUsed(data.freeUsed);
       setPaidCredits(data.paidCredits);
     } catch {
@@ -97,7 +97,7 @@ export default function Home() {
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/autocomplete?q=${encodeURIComponent(query)}`);
-        const data = await res.json();
+        const data = await res.json() as any;
         setSuggestions(data.predictions);
         setShowSuggestions(data.predictions.length > 0);
       } catch {
@@ -132,7 +132,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address }),
       });
-      const data = await res.json();
+      const data = await res.json() as any;
       if (!res.ok) throw new Error(data.error);
       setCustomerAddress(data.customerAddress);
       setNeighbors(data.neighbors);
@@ -157,7 +157,7 @@ export default function Home() {
           sessionId: sessionId.current,
         }),
       });
-      const data = await res.json();
+      const data = await res.json() as any;
 
       if (data.error === "NO_CREDITS") {
         setShowBuyModal(true);
@@ -203,7 +203,7 @@ export default function Home() {
           sessionId: sessionId.current,
         }),
       });
-      const data = await res.json();
+      const data = await res.json() as any;
       if (data.url) {
         window.location.href = data.url;
       }

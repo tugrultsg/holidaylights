@@ -8,7 +8,7 @@ interface NeighborResult {
 }
 
 export async function POST(req: NextRequest) {
-  const { address } = await req.json();
+  const { address } = (await req.json()) as { address: string };
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
   if (!apiKey) {
@@ -21,7 +21,8 @@ export async function POST(req: NextRequest) {
   // Step 1: Geocode the customer address
   const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
   const geocodeRes = await fetch(geocodeUrl);
-  const geocodeData = await geocodeRes.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const geocodeData = (await geocodeRes.json()) as any;
 
   if (geocodeData.status !== "OK" || !geocodeData.results.length) {
     return NextResponse.json(
@@ -58,7 +59,8 @@ export async function POST(req: NextRequest) {
     const nLng = lng + dlng;
     const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${nLat},${nLng}&key=${apiKey}&result_type=street_address`;
     const res = await fetch(url);
-    const data = await res.json();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data = (await res.json()) as any;
     if (data.status === "OK" && data.results.length > 0) {
       return data.results[0];
     }

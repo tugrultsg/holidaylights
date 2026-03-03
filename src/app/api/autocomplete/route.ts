@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&types=address&components=country:us&key=${apiKey}`;
   const res = await fetch(url);
-  const data = await res.json();
+  const data = (await res.json()) as { predictions?: { description: string; place_id: string }[] };
 
   const predictions = (data.predictions || []).map(
     (p: { description: string; place_id: string }) => ({

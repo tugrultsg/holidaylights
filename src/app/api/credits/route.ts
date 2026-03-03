@@ -7,21 +7,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "sessionId required" }, { status: 400 });
   }
 
-  const credits = getCredits(sessionId);
+  const credits = await getCredits(sessionId);
   return NextResponse.json({
     freeUsed: credits.freeUsed,
     paidCredits: credits.paidCredits,
   });
 }
 
-// POST to add credits (called after successful Stripe redirect as backup)
 export async function POST(req: NextRequest) {
-  const { sessionId, stripeSessionId } = await req.json();
+  const { sessionId, stripeSessionId } = (await req.json()) as { sessionId: string; stripeSessionId: string };
   if (!sessionId || !stripeSessionId) {
     return NextResponse.json({ error: "Missing params" }, { status: 400 });
   }
 
-  // Verify the Stripe session is actually paid
   const Stripe = (await import("stripe")).default;
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
     apiVersion: "2026-02-25.clover",
@@ -31,8 +29,8 @@ export async function POST(req: NextRequest) {
     const session = await stripe.checkout.sessions.retrieve(stripeSessionId);
     if (session.payment_status === "paid" && session.metadata?.sessionId === sessionId) {
       const credits = parseInt(session.metadata?.credits || "1", 10);
-      addCredits(sessionId, credits);
-      const updated = getCredits(sessionId);
+      await addCredits(sessionId, credits);
+      const updated = await getCredits(sessionId);
       return NextResponse.json({
         freeUsed: updated.freeUsed,
         paidCredits: updated.paidCredits,
