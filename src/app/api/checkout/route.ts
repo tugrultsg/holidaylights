@@ -6,8 +6,11 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 export async function POST(req: NextRequest) {
-  const { quantity, sessionId } = (await req.json()) as { quantity?: number; sessionId?: string };
-  const credits = quantity || 1;
+  const { amountCents, sessionId } = (await req.json()) as { amountCents: number; sessionId?: string };
+
+  if (!amountCents || amountCents < 200) {
+    return NextResponse.json({ error: "Minimum purchase is $2.00" }, { status: 400 });
+  }
 
   const origin = req.headers.get("origin") || "https://hunsaker-holiday-lights.tt-2ec.workers.dev";
 
@@ -17,20 +20,20 @@ export async function POST(req: NextRequest) {
       {
         price_data: {
           currency: "usd",
-          unit_amount: 200, // $2.00
+          unit_amount: amountCents,
           product_data: {
-            name: "Holiday Lights Address Credit",
-            description: "AI-powered holiday lights preview for all 5 neighbors of one address",
+            name: "Holiday Lights Balance",
+            description: `$${(amountCents / 100).toFixed(2)} balance — $2/address (all 5) or $0.50/single home`,
           },
         },
-        quantity: credits,
+        quantity: 1,
       },
     ],
     metadata: {
       sessionId: sessionId || "",
-      credits: credits.toString(),
+      amountCents: amountCents.toString(),
     },
-    success_url: `${origin}?payment=success&credits=${credits}`,
+    success_url: `${origin}?payment=success`,
     cancel_url: `${origin}?payment=cancelled`,
   });
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { addCredits } from "@/lib/credits";
+import { addBalance } from "@/lib/credits";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-02-25.clover",
@@ -26,10 +26,10 @@ export async function POST(req: NextRequest) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const sessionId = session.metadata?.sessionId || "";
-    const credits = parseInt(session.metadata?.credits || "1", 10);
+    const amountCents = parseInt(session.metadata?.amountCents || "0", 10);
 
-    if (sessionId) {
-      await addCredits(sessionId, credits);
+    if (sessionId && amountCents > 0) {
+      await addBalance(sessionId, amountCents);
     }
   }
 

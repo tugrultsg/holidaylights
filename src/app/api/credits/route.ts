@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCredits, addCredits } from "@/lib/credits";
+import { getCredits, addBalance } from "@/lib/credits";
 
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get("sessionId");
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const credits = await getCredits(sessionId);
   return NextResponse.json({
     freeUsed: credits.freeUsed,
-    paidCredits: credits.paidCredits,
+    balanceCents: credits.balanceCents,
   });
 }
 
@@ -28,12 +28,14 @@ export async function POST(req: NextRequest) {
   try {
     const session = await stripe.checkout.sessions.retrieve(stripeSessionId);
     if (session.payment_status === "paid" && session.metadata?.sessionId === sessionId) {
-      const credits = parseInt(session.metadata?.credits || "1", 10);
-      await addCredits(sessionId, credits);
+      const amountCents = parseInt(session.metadata?.amountCents || "0", 10);
+      if (amountCents > 0) {
+        await addBalance(sessionId, amountCents);
+      }
       const updated = await getCredits(sessionId);
       return NextResponse.json({
         freeUsed: updated.freeUsed,
-        paidCredits: updated.paidCredits,
+        balanceCents: updated.balanceCents,
       });
     }
     return NextResponse.json({ error: "Payment not verified" }, { status: 400 });

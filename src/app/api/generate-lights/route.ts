@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
-import { getCredits, useFreeCredit, usePaidCredit } from "@/lib/credits";
+import { getCredits, useFreeCredit, charge } from "@/lib/credits";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -16,7 +16,41 @@ interface NeighborInput {
   address: string;
 }
 
-// Generate lights for all neighbors in one batch (1 credit = all 5)
+async function generateOne(neighbor: NeighborInput) {
+  try {
+    const result = await fal.subscribe("fal-ai/nano-banana-pro/edit", {
+      input: {
+        prompt: PROMPT,
+        image_urls: [neighbor.imageUrl],
+        num_images: 1,
+        output_format: "png" as const,
+      },
+      logs: false,
+    });
+
+    const data = result.data as { images?: { url: string }[] };
+
+    if (!data.images || data.images.length === 0) {
+      return { address: neighbor.address, originalUrl: neighbor.imageUrl, generatedUrl: null, error: "No image generated" };
+    }
+
+    return {
+      address: neighbor.address,
+      originalUrl: neighbor.imageUrl,
+      generatedUrl: data.images[0].url,
+      error: null,
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Generation failed";
+    return { address: neighbor.address, originalUrl: neighbor.imageUrl, generatedUrl: null, error: message };
+  }
+}
+
+// Pricing:
+// - All 5 neighbors at once: $2.00 (200 cents)
+// - Single neighbor: $0.50 (50 cents)
+// - First use is free (all 5)
+
 export async function POST(req: NextRequest) {
   const { neighbors, sessionId } = (await req.json()) as {
     neighbors: NeighborInput[];
@@ -31,61 +65,48 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
   }
 
-  // Check credits — 1 credit = all neighbors for one address
+  const isBatch = neighbors.length > 1;
+  const costCents = isBatch ? 200 : 50; // $2 for batch, $0.50 for single
+
+  // Check credits
   const credits = await getCredits(sessionId);
 
-  if (!credits.freeUsed) {
+  if (!credits.freeUsed && isBatch) {
+    // First batch is free
     await useFreeCredit(sessionId);
-  } else if (credits.paidCredits > 0) {
-    await usePaidCredit(sessionId);
+  } else if (credits.balanceCents >= costCents) {
+    const charged = await charge(sessionId, costCents);
+    if (!charged) {
+      return NextResponse.json(
+        {
+          error: "NO_CREDITS",
+          message: isBatch
+            ? "Not enough balance. All 5 neighbors cost $2.00."
+            : "Not enough balance. Single generation costs $0.50.",
+        },
+        { status: 402 }
+      );
+    }
   } else {
     return NextResponse.json(
       {
         error: "NO_CREDITS",
-        message: "You've used your free search. Purchase credits to continue ($2 per address, includes all 5 neighbors).",
+        message: isBatch
+          ? "You've used your free search. All 5 neighbors cost $2.00, or generate one at a time for $0.50 each."
+          : "Not enough balance. Single generation costs $0.50. Add funds to continue.",
       },
       { status: 402 }
     );
   }
 
-  // Generate all images in parallel
-  const results = await Promise.all(
-    neighbors.map(async (neighbor) => {
-      try {
-        const result = await fal.subscribe("fal-ai/nano-banana-pro/edit", {
-          input: {
-            prompt: PROMPT,
-            image_urls: [neighbor.imageUrl],
-            num_images: 1,
-            output_format: "png" as const,
-          },
-          logs: false,
-        });
-
-        const data = result.data as { images?: { url: string }[] };
-
-        if (!data.images || data.images.length === 0) {
-          return { address: neighbor.address, originalUrl: neighbor.imageUrl, generatedUrl: null, error: "No image generated" };
-        }
-
-        return {
-          address: neighbor.address,
-          originalUrl: neighbor.imageUrl,
-          generatedUrl: data.images[0].url,
-          error: null,
-        };
-      } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : "Generation failed";
-        return { address: neighbor.address, originalUrl: neighbor.imageUrl, generatedUrl: null, error: message };
-      }
-    })
-  );
+  // Generate images
+  const results = await Promise.all(neighbors.map(generateOne));
 
   const updatedCredits = await getCredits(sessionId);
 
   return NextResponse.json({
     results,
-    credits: updatedCredits.paidCredits,
+    balanceCents: updatedCredits.balanceCents,
     freeUsed: updatedCredits.freeUsed,
   });
 }
