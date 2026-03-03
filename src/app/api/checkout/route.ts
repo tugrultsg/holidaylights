@@ -44,6 +44,9 @@ export async function POST(req: NextRequest) {
       },
       customer_email: session.email,
       redirect_on_completion: "never",
+      payment_intent_data: {
+        statement_descriptor: "HOLIDAYLIGHTSON",
+      },
     });
 
     return NextResponse.json({ clientSecret: checkoutSession.client_secret });
