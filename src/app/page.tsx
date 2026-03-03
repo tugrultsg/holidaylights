@@ -223,7 +223,7 @@ export default function Home() {
   if (authLoading) return null;
 
   return (
-    <div className="min-h-screen bg-[#050507] text-white antialiased overflow-x-hidden">
+    <div className="min-h-screen bg-[#0c0c12] text-white antialiased overflow-x-hidden">
       {/* Ambient background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="orb absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-500/[0.03] blur-[120px]" />
@@ -300,7 +300,7 @@ export default function Home() {
                   onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                   onKeyDown={(e) => e.key === "Enter" && findNeighbors()}
                   placeholder="Enter a home address..."
-                  className="w-full pl-12 pr-4 py-4 bg-white/[0.04] border border-white/[0.07] rounded-2xl text-white text-[15px] placeholder-white/20 focus:outline-none focus:border-amber-500/30 focus:bg-white/[0.06] focus:shadow-lg focus:shadow-amber-500/5 transition-all"
+                  className="w-full pl-12 pr-4 py-4 bg-white/[0.07] border border-white/[0.12] rounded-2xl text-white text-[15px] placeholder-white/30 focus:outline-none focus:border-amber-500/40 focus:bg-white/[0.1] focus:shadow-lg focus:shadow-amber-500/5 transition-all"
                 />
                 {showSuggestions && (
                   <div className="absolute top-full left-0 right-0 mt-2 bg-[#111118] border border-white/[0.08] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden z-50">
