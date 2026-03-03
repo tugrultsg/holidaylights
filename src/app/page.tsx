@@ -200,8 +200,10 @@ export default function Home() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = (await res.json()) as any;
       if (data.error === "UNAUTHORIZED") { window.location.href = "/api/auth/login"; return; }
-      if (data.url) window.location.href = data.url;
-    } catch { setError("Could not start checkout"); } finally { setBuyLoading(false); }
+      if (!res.ok) { setError(data.error || "Checkout failed"); setBuyLoading(false); return; }
+      if (data.url) { window.location.href = data.url; return; }
+      setError("No checkout URL returned");
+    } catch (err: unknown) { setError(err instanceof Error ? err.message : "Could not start checkout"); } finally { setBuyLoading(false); }
   };
 
   const completedCount = Object.values(results).filter((r) => r?.generatedUrl).length;
