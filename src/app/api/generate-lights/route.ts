@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import { getCredits, useFreeCredit, charge } from "@/lib/credits";
+import { getSession } from "@/lib/auth";
 
 fal.config({
   credentials: process.env.FAL_KEY,
@@ -46,63 +47,43 @@ async function generateOne(neighbor: NeighborInput) {
   }
 }
 
-// Pricing:
-// - All 5 neighbors at once: $2.00 (200 cents)
-// - Single neighbor: $0.50 (50 cents)
-// - First use is free (all 5)
-
 export async function POST(req: NextRequest) {
-  const { neighbors, sessionId } = (await req.json()) as {
-    neighbors: NeighborInput[];
-    sessionId: string;
-  };
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
+
+  const { neighbors } = (await req.json()) as { neighbors: NeighborInput[] };
 
   if (!neighbors || neighbors.length === 0) {
     return NextResponse.json({ error: "neighbors are required" }, { status: 400 });
   }
 
-  if (!sessionId) {
-    return NextResponse.json({ error: "sessionId is required" }, { status: 400 });
-  }
-
+  const userId = session.userId;
   const isBatch = neighbors.length > 1;
-  const costCents = isBatch ? 200 : 50; // $2 for batch, $0.50 for single
+  const costCents = isBatch ? 200 : 50;
 
-  // Check credits
-  const credits = await getCredits(sessionId);
+  const credits = await getCredits(userId);
 
   if (!credits.freeUsed && isBatch) {
-    // First batch is free
-    await useFreeCredit(sessionId);
+    await useFreeCredit(userId);
   } else if (credits.balanceCents >= costCents) {
-    const charged = await charge(sessionId, costCents);
+    const charged = await charge(userId, costCents);
     if (!charged) {
       return NextResponse.json(
-        {
-          error: "NO_CREDITS",
-          message: isBatch
-            ? "Not enough balance. All 5 neighbors cost $2.00."
-            : "Not enough balance. Single generation costs $0.50.",
-        },
+        { error: "NO_CREDITS", message: isBatch ? "Not enough balance. All 5 neighbors cost $2.00." : "Not enough balance. Single generation costs $0.50." },
         { status: 402 }
       );
     }
   } else {
     return NextResponse.json(
-      {
-        error: "NO_CREDITS",
-        message: isBatch
-          ? "You've used your free search. All 5 neighbors cost $2.00, or generate one at a time for $0.50 each."
-          : "Not enough balance. Single generation costs $0.50. Add funds to continue.",
-      },
+      { error: "NO_CREDITS", message: isBatch ? "You've used your free search. All 5 neighbors cost $2.00, or generate one at a time for $0.50 each." : "Not enough balance. Single generation costs $0.50. Add funds to continue." },
       { status: 402 }
     );
   }
 
-  // Generate images
   const results = await Promise.all(neighbors.map(generateOne));
-
-  const updatedCredits = await getCredits(sessionId);
+  const updatedCredits = await getCredits(userId);
 
   return NextResponse.json({
     results,

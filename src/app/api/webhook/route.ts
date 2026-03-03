@@ -25,11 +25,11 @@ export async function POST(req: NextRequest) {
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
-    const sessionId = session.metadata?.sessionId || "";
+    const userId = session.metadata?.userId || "";
     const amountCents = parseInt(session.metadata?.amountCents || "0", 10);
 
-    if (sessionId && amountCents > 0) {
-      await addBalance(sessionId, amountCents);
+    if (userId && amountCents > 0) {
+      await addBalance(userId, amountCents);
     }
   }
 
