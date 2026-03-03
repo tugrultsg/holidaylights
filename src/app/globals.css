@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0f;
+  --background: #050507;
   --foreground: #ffffff;
 }
 
@@ -17,7 +17,52 @@ body {
   color: var(--foreground);
 }
 
-/* Selection */
 ::selection {
   background: rgba(251, 191, 36, 0.3);
+}
+
+/* Smooth image zoom on hover */
+.img-zoom {
+  transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.group:hover .img-zoom {
+  transform: scale(1.03);
+}
+
+/* Animated gradient orb */
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -20px) scale(1.05); }
+  66% { transform: translate(-20px, 15px) scale(0.95); }
+}
+.orb {
+  animation: float 20s ease-in-out infinite;
+}
+.orb-2 {
+  animation: float 25s ease-in-out infinite reverse;
+}
+
+/* Before/After slider line */
+@keyframes shimmer {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+.shimmer {
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* Smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
