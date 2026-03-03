@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
-import { getCredits, useFreeCredit, charge } from "@/lib/credits";
+import { getCredits, useFreeCredits, charge } from "@/lib/credits";
 import { getSession } from "@/lib/auth";
 
 fal.config({
@@ -11,6 +11,8 @@ export const maxDuration = 120;
 
 const PROMPT =
   "Add beautiful, colorful Christmas holiday lights decorating the roofline, gutters, windows, and porch of this house. The lights should look realistic and festive, with warm white and multi-colored LED string lights outlining the architectural features. Remove any cars, vehicles, or automobiles parked in the driveway, street, or in front of the house — replace them with a clean, empty driveway and street. Keep the house and surroundings exactly the same otherwise, only add the Christmas lights and remove the cars. Make it look like a professional holiday light installation at nighttime or dusk with the lights glowing brightly.";
+
+const FREE_LIMIT = 5;
 
 interface NeighborInput {
   imageUrl: string;
@@ -60,26 +62,42 @@ export async function POST(req: NextRequest) {
   }
 
   const userId = session.userId;
-  const isBatch = neighbors.length > 1;
-  const costCents = isBatch ? 200 : 50;
-
+  const count = neighbors.length;
+  const isBatch = count > 1;
   const credits = await getCredits(userId);
+  const freeRemaining = Math.max(0, FREE_LIMIT - credits.freeUsed);
 
-  if (!credits.freeUsed && isBatch) {
-    await useFreeCredit(userId);
-  } else if (credits.balanceCents >= costCents) {
-    const charged = await charge(userId, costCents);
-    if (!charged) {
+  if (freeRemaining >= count) {
+    // All covered by free credits
+    await useFreeCredits(userId, count);
+  } else if (freeRemaining > 0) {
+    // Partially free — charge for the rest
+    const paidCount = count - freeRemaining;
+    const costCents = isBatch ? 200 : paidCount * 50;
+    if (credits.balanceCents < costCents) {
       return NextResponse.json(
-        { error: "NO_CREDITS", message: isBatch ? "Not enough balance. All 5 neighbors cost $2.00." : "Not enough balance. Single generation costs $0.50." },
+        { error: "NO_CREDITS", message: `You have ${freeRemaining} free generation${freeRemaining !== 1 ? "s" : ""} left. The remaining ${paidCount} would cost $${(costCents / 100).toFixed(2)}. Add funds to continue.` },
         { status: 402 }
       );
     }
+    await useFreeCredits(userId, freeRemaining);
+    await charge(userId, costCents);
   } else {
-    return NextResponse.json(
-      { error: "NO_CREDITS", message: isBatch ? "You've used your free search. All 5 neighbors cost $2.00, or generate one at a time for $0.50 each." : "Not enough balance. Single generation costs $0.50. Add funds to continue." },
-      { status: 402 }
-    );
+    // No free credits left — full charge
+    const costCents = isBatch ? 200 : 50;
+    if (credits.balanceCents < costCents) {
+      return NextResponse.json(
+        { error: "NO_CREDITS", message: isBatch ? "All 5 neighbors cost $2.00." : "Single generation costs $0.50. Add funds to continue." },
+        { status: 402 }
+      );
+    }
+    const charged = await charge(userId, costCents);
+    if (!charged) {
+      return NextResponse.json(
+        { error: "NO_CREDITS", message: "Not enough balance." },
+        { status: 402 }
+      );
+    }
   }
 
   const results = await Promise.all(neighbors.map(generateOne));

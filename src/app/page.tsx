@@ -45,7 +45,7 @@ export default function Home() {
   const [generatingSingle, setGeneratingSingle] = useState<Record<number, boolean>>({});
   const [results, setResults] = useState<Record<number, GeneratedResult>>({});
   const [error, setError] = useState("");
-  const [freeUsed, setFreeUsed] = useState(false);
+  const [freeUsed, setFreeUsed] = useState(0);
   const [balanceCents, setBalanceCents] = useState(0);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [buyAmount, setBuyAmount] = useState(1000);
@@ -220,6 +220,7 @@ export default function Home() {
   const completedCount = Object.values(results).filter((r) => r?.generatedUrl).length;
   const allDone = completedCount === neighbors.length && neighbors.length > 0;
   const balanceDisplay = (balanceCents / 100).toFixed(2);
+  const freeRemaining = Math.max(0, 5 - freeUsed);
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white antialiased">
@@ -306,7 +307,7 @@ export default function Home() {
               {completedCount > 0 && !allDone && <span className="text-xs text-white/30">{completedCount}/{neighbors.length} generated</span>}
               {!allDone && neighbors.length > 0 && (
                 <button onClick={generateAll} disabled={generatingAll} className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold rounded-xl hover:from-amber-400 hover:to-orange-400 disabled:from-white/10 disabled:to-white/10 disabled:text-white/30 transition-all">
-                  {generatingAll ? (<span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</span>) : (<>Generate All — {!freeUsed ? <span className="ml-1 px-2 py-0.5 bg-emerald-500/30 text-emerald-300 text-[10px] rounded-full font-bold uppercase">Free</span> : "$2.00"}</>)}
+                  {generatingAll ? (<span className="flex items-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Generating...</span>) : (<>Generate All — {freeRemaining >= (neighbors.length - completedCount) ? <span className="ml-1 px-2 py-0.5 bg-emerald-500/30 text-emerald-300 text-[10px] rounded-full font-bold uppercase">Free</span> : "$2.00"}</>)}
                 </button>
               )}
               {allDone && (<span className="flex items-center gap-1.5 text-xs text-emerald-400/70"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>All generated</span>)}
@@ -314,10 +315,10 @@ export default function Home() {
           </div>
         )}
 
-        {!freeUsed && neighbors.length > 0 && completedCount === 0 && (
+        {freeRemaining > 0 && neighbors.length > 0 && completedCount === 0 && (
           <div className="mb-6 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-emerald-400" />
-            <p className="text-sm text-emerald-300/80">Your first address is <span className="font-semibold text-emerald-300">free</span> — all 5 neighbors included!</p>
+            <p className="text-sm text-emerald-300/80">You have <span className="font-semibold text-emerald-300">{freeRemaining} free</span> generation{freeRemaining !== 1 ? "s" : ""} remaining!</p>
           </div>
         )}
 
@@ -336,7 +337,7 @@ export default function Home() {
                   {result?.generatedUrl ? (
                     <span className="flex items-center gap-1.5 text-xs text-emerald-400/70"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>Done</span>
                   ) : !generatingAll && !isSingleGenerating ? (
-                    <button onClick={() => generateSingle(index, neighbor)} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-white/[0.06] text-white/60 hover:bg-white/[0.1] hover:text-white/80 transition-all">Generate — $0.50</button>
+                    <button onClick={() => generateSingle(index, neighbor)} className="px-4 py-1.5 text-xs font-medium rounded-lg bg-white/[0.06] text-white/60 hover:bg-white/[0.1] hover:text-white/80 transition-all">{freeRemaining > 0 ? "Generate — Free" : "Generate — $0.50"}</button>
                   ) : null}
                 </div>
                 <div className="grid md:grid-cols-2">

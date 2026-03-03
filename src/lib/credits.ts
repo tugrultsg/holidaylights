@@ -1,6 +1,6 @@
 // Credits stored in Cloudflare KV for persistence across deploys
 // Balance stored in cents to support $0.50 and $2.00 charges
-// Key format: "credits:{sessionId}" -> JSON { freeUsed, balanceCents }
+// Key format: "credits:{userId}" -> JSON { freeUsed, balanceCents }
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
@@ -11,7 +11,7 @@ declare global {
 }
 
 interface CreditEntry {
-  freeUsed: boolean;
+  freeUsed: number; // how many free generations used (max 5)
   balanceCents: number; // stored in cents ($2.00 = 200)
 }
 
@@ -30,17 +30,31 @@ function key(sessionId: string) {
 
 export async function getCredits(sessionId: string): Promise<CreditEntry> {
   const kv = await getKV();
-  if (!kv) return { freeUsed: false, balanceCents: 0 };
+  if (!kv) return { freeUsed: 0, balanceCents: 0 };
 
   const data = await kv.get(key(sessionId), "json");
-  if (!data) return { freeUsed: false, balanceCents: 0 };
+  if (!data) return { freeUsed: 0, balanceCents: 0 };
 
-  // Handle migration from old format
   const entry = data as Record<string, unknown>;
-  if ("paidCredits" in entry) {
-    // Old format: convert whole credits to cents ($2 each)
+
+  // Migrate from old boolean freeUsed format
+  if (typeof entry.freeUsed === "boolean") {
     const migrated: CreditEntry = {
-      freeUsed: (entry.freeUsed as boolean) || false,
+      freeUsed: entry.freeUsed ? 5 : 0,
+      balanceCents: (entry.balanceCents as number) || 0,
+    };
+    // Also handle old paidCredits format
+    if ("paidCredits" in entry) {
+      migrated.balanceCents = ((entry.paidCredits as number) || 0) * 200;
+    }
+    await kv.put(key(sessionId), JSON.stringify(migrated));
+    return migrated;
+  }
+
+  // Handle old paidCredits format
+  if ("paidCredits" in entry) {
+    const migrated: CreditEntry = {
+      freeUsed: (entry.freeUsed as number) || 0,
       balanceCents: ((entry.paidCredits as number) || 0) * 200,
     };
     await kv.put(key(sessionId), JSON.stringify(migrated));
@@ -50,12 +64,12 @@ export async function getCredits(sessionId: string): Promise<CreditEntry> {
   return data as CreditEntry;
 }
 
-export async function useFreeCredit(sessionId: string): Promise<void> {
+export async function useFreeCredits(sessionId: string, count: number): Promise<void> {
   const kv = await getKV();
   if (!kv) return;
 
   const entry = await getCredits(sessionId);
-  entry.freeUsed = true;
+  entry.freeUsed += count;
   await kv.put(key(sessionId), JSON.stringify(entry));
 }
 
