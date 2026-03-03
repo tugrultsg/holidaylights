@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Minimum purchase is $2.00" }, { status: 400 });
   }
 
-  const origin = req.headers.get("origin") || "https://hunsaker-holiday-lights.tt-2ec.workers.dev";
+  const origin = req.headers.get("origin") || "https://holidaylightson.com";
 
   const checkoutSession = await stripe.checkout.sessions.create({
     mode: "payment",

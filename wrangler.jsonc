@@ -7,6 +7,11 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  "workers_dev": true,
+  "routes": [
+    { "pattern": "holidaylightson.com", "custom_domain": true },
+    { "pattern": "www.holidaylightson.com", "custom_domain": true }
+  ],
   "kv_namespaces": [
     {
       "binding": "RATE_LIMIT",
