@@ -1,0 +1,16 @@
+{
+  "name": "hunsaker-holiday-lights",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "RATE_LIMIT",
+      "id": "77d9d23261fd4d5096ad739235789086"
+    }
+  ]
+}
