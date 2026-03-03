@@ -382,40 +382,116 @@ export default function Home() {
 
       {/* Buy Modal */}
       {showBuyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={closeBuyModal} />
-          <div className={`relative bg-[#12121a] border border-white/[0.08] rounded-2xl p-8 ${checkoutClientSecret ? "max-w-lg" : "max-w-sm"} w-full mx-4 shadow-2xl max-h-[90vh] overflow-y-auto`}>
-            <button onClick={closeBuyModal} className="absolute top-4 right-4 text-white/30 hover:text-white/60 transition-colors z-10"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg></button>
-            {checkoutClientSecret ? (
-              <div id="checkout">
-                <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret: checkoutClientSecret }}>
-                  <EmbeddedCheckout />
-                </EmbeddedCheckoutProvider>
-              </div>
-            ) : (
-              <>
-                <div className="text-center mb-6">
-                  <div className="w-12 h-12 mx-auto mb-4 rounded-xl bg-gradient-to-br from-amber-400/20 to-orange-500/20 border border-amber-500/20 flex items-center justify-center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-amber-400"><path d="M9 18h6M10 22h4M12 2v1" /><path d="M12 6a6 6 0 0 0-4 10.5V18h8v-1.5A6 6 0 0 0 12 6z" /></svg></div>
-                  <h2 className="text-lg font-semibold text-white mb-1">Add Funds</h2>
-                  <p className="text-sm text-white/40">$2 for all 5 neighbors, or $0.50 each</p>
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={closeBuyModal} />
+          {checkoutClientSecret ? (
+            <div className="relative z-10 flex flex-col h-full">
+              {/* Checkout header */}
+              <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setCheckoutClientSecret(null)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5" /><polyline points="12 19 5 12 12 5" /></svg>
+                  </button>
+                  <span className="text-sm font-medium text-gray-900">Complete Payment</span>
                 </div>
-                <div className="mb-6">
-                  <div className="grid grid-cols-4 gap-2">
-                    {[{ cents: 200, label: "$2" }, { cents: 500, label: "$5" }, { cents: 1000, label: "$10" }, { cents: 2500, label: "$25" }].map(({ cents, label }) => (
-                      <button key={cents} onClick={() => setBuyAmount(cents)} className={`py-3 rounded-xl text-center transition-all ${buyAmount === cents ? "bg-amber-500/20 border border-amber-500/40 text-amber-300" : "bg-white/[0.04] border border-white/[0.06] text-white/50 hover:bg-white/[0.06]"}`}>
-                        <div className="text-lg font-bold">{label}</div>
-                        <div className="text-[10px] text-white/30">{Math.floor(cents / 200)} addr{Math.floor(cents / 200) !== 1 ? "s" : ""}</div>
-                      </button>
-                    ))}
+                <button onClick={closeBuyModal} className="text-gray-400 hover:text-gray-600 transition-colors">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                </button>
+              </div>
+              {/* Checkout form */}
+              <div className="flex-1 overflow-y-auto bg-white">
+                <div className="max-w-lg mx-auto py-8 px-6">
+                  <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret: checkoutClientSecret }}>
+                    <EmbeddedCheckout />
+                  </EmbeddedCheckoutProvider>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="relative z-10 flex items-center justify-center min-h-full px-4">
+              <div className="relative w-full max-w-md">
+                {/* Close button */}
+                <button onClick={closeBuyModal} className="absolute -top-12 right-0 text-white/40 hover:text-white/70 transition-colors">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                </button>
+
+                <div className="bg-[#12121a] border border-white/[0.08] rounded-3xl overflow-hidden shadow-2xl shadow-black/50">
+                  {/* Header */}
+                  <div className="px-8 pt-8 pb-6 text-center">
+                    <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6M10 22h4M12 2v1" /><path d="M12 6a6 6 0 0 0-4 10.5V18h8v-1.5A6 6 0 0 0 12 6z" /></svg>
+                    </div>
+                    <h2 className="text-xl font-bold text-white mb-1">Add Funds</h2>
+                    <p className="text-sm text-white/35">Choose an amount to add to your balance</p>
+                  </div>
+
+                  {/* Amount options */}
+                  <div className="px-8 pb-6">
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { cents: 200, label: "$2", desc: "1 address" },
+                        { cents: 500, label: "$5", desc: "2 addresses" },
+                        { cents: 1000, label: "$10", desc: "5 addresses" },
+                        { cents: 2500, label: "$25", desc: "12 addresses" },
+                      ].map(({ cents, label, desc }) => (
+                        <button
+                          key={cents}
+                          onClick={() => setBuyAmount(cents)}
+                          className={`relative py-4 px-4 rounded-2xl text-left transition-all duration-200 ${
+                            buyAmount === cents
+                              ? "bg-gradient-to-br from-amber-500/15 to-orange-500/10 border-2 border-amber-500/50 shadow-lg shadow-amber-500/5"
+                              : "bg-white/[0.03] border-2 border-transparent hover:bg-white/[0.06] hover:border-white/[0.08]"
+                          }`}
+                        >
+                          {buyAmount === cents && (
+                            <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
+                            </div>
+                          )}
+                          <div className={`text-2xl font-bold mb-0.5 ${buyAmount === cents ? "text-amber-300" : "text-white/70"}`}>{label}</div>
+                          <div className={`text-xs ${buyAmount === cents ? "text-amber-400/60" : "text-white/25"}`}>{desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Pricing info */}
+                  <div className="mx-8 mb-6 px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-white/30">All 5 neighbors</span>
+                      <span className="text-white/50 font-medium">$2.00</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs mt-1.5">
+                      <span className="text-white/30">Single home</span>
+                      <span className="text-white/50 font-medium">$0.50</span>
+                    </div>
+                  </div>
+
+                  {/* CTA */}
+                  <div className="px-8 pb-8">
+                    <button
+                      onClick={handleBuyCredits}
+                      disabled={buyLoading}
+                      className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 transition-all shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30"
+                    >
+                      {buyLoading ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Loading...
+                        </span>
+                      ) : (
+                        `Continue — $${(buyAmount / 100).toFixed(2)}`
+                      )}
+                    </button>
+                    <div className="flex items-center justify-center gap-2 mt-4">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/15"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                      <p className="text-[11px] text-white/20">Secure payment via Stripe</p>
+                    </div>
                   </div>
                 </div>
-                <button onClick={handleBuyCredits} disabled={buyLoading} className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-xl hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 transition-all">
-                  {buyLoading ? (<span className="flex items-center justify-center gap-2"><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Loading...</span>) : `Add $${(buyAmount / 100).toFixed(2)} to balance`}
-                </button>
-                <p className="text-[11px] text-white/20 text-center mt-4">Secure payment via Stripe</p>
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
