@@ -429,11 +429,11 @@ export default function Home() {
                   <div className="px-8 pb-6">
                     <div className="grid grid-cols-2 gap-3">
                       {[
-                        { cents: 200, label: "$2", desc: "1 address" },
-                        { cents: 500, label: "$5", desc: "2 addresses" },
-                        { cents: 1000, label: "$10", desc: "5 addresses" },
-                        { cents: 2500, label: "$25", desc: "12 addresses" },
-                      ].map(({ cents, label, desc }) => (
+                        { cents: 200, label: "$2", desc: "1 address", homes: "5 homes" },
+                        { cents: 500, label: "$5", desc: "2 addresses", homes: "10 homes" },
+                        { cents: 1000, label: "$10", desc: "5 addresses", homes: "25 homes" },
+                        { cents: 2500, label: "$25", desc: "12 addresses", homes: "60 homes" },
+                      ].map(({ cents, label, desc, homes }) => (
                         <button
                           key={cents}
                           onClick={() => setBuyAmount(cents)}
@@ -448,8 +448,9 @@ export default function Home() {
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
                             </div>
                           )}
-                          <div className={`text-2xl font-bold mb-0.5 ${buyAmount === cents ? "text-amber-300" : "text-white/70"}`}>{label}</div>
+                          <div className={`text-2xl font-bold mb-1 ${buyAmount === cents ? "text-amber-300" : "text-white/70"}`}>{label}</div>
                           <div className={`text-xs ${buyAmount === cents ? "text-amber-400/60" : "text-white/25"}`}>{desc}</div>
+                          <div className={`text-[10px] mt-0.5 ${buyAmount === cents ? "text-amber-400/40" : "text-white/15"}`}>{homes}</div>
                         </button>
                       ))}
                     </div>
