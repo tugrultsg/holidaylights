@@ -443,6 +443,24 @@ export default function Home() {
                             <div className="absolute top-3 left-3 z-10">
                               <span className="px-2.5 py-1 text-[10px] uppercase tracking-widest font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg shadow-lg shadow-amber-500/20">After</span>
                             </div>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(result.generatedUrl!);
+                                  const blob = await res.blob();
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement("a");
+                                  a.href = url;
+                                  a.download = `holiday-lights-${neighbor.address.split(",")[0].replace(/\s+/g, "-").toLowerCase()}.png`;
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                } catch { /* ignore */ }
+                              }}
+                              className="absolute top-3 right-3 z-10 w-8 h-8 rounded-lg bg-black/50 backdrop-blur-xl flex items-center justify-center text-white/60 hover:text-white hover:bg-black/70 transition-all"
+                              title="Download image"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                            </button>
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src={result.generatedUrl} alt={`${neighbor.address} with holiday lights`} className="img-zoom w-full h-64 md:h-72 object-cover" />
                           </>
