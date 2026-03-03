@@ -19,13 +19,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Minimum purchase is $2.00" }, { status: 400 });
   }
 
-  const origin = req.headers.get("origin") || "https://holidaylightson.com";
-
   try {
     const checkoutSession = await stripe.checkout.sessions.create({
       mode: "payment",
       ui_mode: "embedded",
       locale: "en",
+      adaptive_pricing: { enabled: false },
       line_items: [
         {
           price_data: {
@@ -44,7 +43,7 @@ export async function POST(req: NextRequest) {
         amountCents: amountCents.toString(),
       },
       customer_email: session.email,
-      return_url: `${origin}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      redirect_on_completion: "never",
     });
 
     return NextResponse.json({ clientSecret: checkoutSession.client_secret });

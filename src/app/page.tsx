@@ -81,11 +81,10 @@ export default function Home() {
   }, [user, fetchCredits]);
 
   useEffect(() => {
-    if (!user) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("payment") === "success") {
       window.history.replaceState({}, "", "/");
-      setTimeout(fetchCredits, 2000);
+      if (user) setTimeout(fetchCredits, 2000);
     }
   }, [user, fetchCredits]);
 
@@ -401,7 +400,7 @@ export default function Home() {
               {/* Checkout form */}
               <div className="flex-1 overflow-y-auto bg-white">
                 <div className="max-w-lg mx-auto py-8 px-6">
-                  <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret: checkoutClientSecret }}>
+                  <EmbeddedCheckoutProvider stripe={stripePromise} options={{ clientSecret: checkoutClientSecret, onComplete: () => { setTimeout(() => { closeBuyModal(); fetchCredits(); }, 1500); } }}>
                     <EmbeddedCheckout />
                   </EmbeddedCheckoutProvider>
                 </div>
