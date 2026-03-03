@@ -223,7 +223,7 @@ export default function Home() {
   if (authLoading) return null;
 
   return (
-    <div className="min-h-screen bg-[#0c0c12] text-white antialiased overflow-x-hidden">
+    <div className="min-h-screen bg-[#13131b] text-white antialiased overflow-x-hidden">
       {/* Ambient background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="orb absolute top-[-20%] left-[-10%] w-[600px] h-[600px] rounded-full bg-amber-500/[0.03] blur-[120px]" />
@@ -300,10 +300,10 @@ export default function Home() {
                   onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                   onKeyDown={(e) => e.key === "Enter" && findNeighbors()}
                   placeholder="Enter a home address..."
-                  className="w-full pl-12 pr-4 py-4 bg-white/[0.07] border border-white/[0.12] rounded-2xl text-white text-[15px] placeholder-white/30 focus:outline-none focus:border-amber-500/40 focus:bg-white/[0.1] focus:shadow-lg focus:shadow-amber-500/5 transition-all"
+                  className="w-full pl-12 pr-4 py-4 bg-white/[0.08] border border-white/[0.15] rounded-2xl text-white text-[15px] placeholder-white/35 focus:outline-none focus:border-amber-500/50 focus:bg-white/[0.12] focus:shadow-lg focus:shadow-amber-500/5 transition-all"
                 />
                 {showSuggestions && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-[#111118] border border-white/[0.08] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden z-50">
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a24] border border-white/[0.08] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden z-50">
                     {suggestions.map((prediction, i) => (
                       <button key={prediction.placeId} onClick={() => selectSuggestion(prediction)} className={`w-full text-left px-5 py-3.5 text-sm hover:bg-white/[0.04] transition-colors flex items-center gap-3 ${i > 0 ? "border-t border-white/[0.04]" : ""}`}>
                         <span className="text-white/15 flex-shrink-0">
@@ -541,7 +541,7 @@ export default function Home() {
                 <button onClick={closeBuyModal} className="absolute -top-12 right-0 text-white/40 hover:text-white/70 transition-colors">
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
                 </button>
-                <div className="bg-[#0e0e14] border border-white/[0.06] rounded-3xl overflow-hidden shadow-2xl shadow-black/50">
+                <div className="bg-[#16161f] border border-white/[0.06] rounded-3xl overflow-hidden shadow-2xl shadow-black/50">
                   <div className="px-8 pt-8 pb-6 text-center">
                     <div className="w-14 h-14 mx-auto mb-5 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
                       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6M10 22h4M12 2v1" /><path d="M12 6a6 6 0 0 0-4 10.5V18h8v-1.5A6 6 0 0 0 12 6z" /></svg>
